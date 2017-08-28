@@ -12,20 +12,22 @@ A data component to get detailed information for a given concept and user id
     
 The fields 'concept' and 'user' are  mandatory.
 
+The property 'conceptdetails' returns the response against the rest call.
+
 If 'apiUrl' is not provided, then the component would fetch sample data from mock json.
 
 API endpoint:
 
-    GET /concepts/{id}
+    GET /domains/{id}
     
 Input:
 - User Id
-- Concept Id
+- Domain Id
 - Selected Synonyms, Patterns, Related Concepts, Example Values for pivoting
 
 Sample Input: (Query params)
 
-    GET /concepts/{id}?synonyms=100052,100053,100054&patterns=100152,100152,100152&relatedConcepts=100652&exampleValues=200652
+    GET /domains/{id}?synonyms=100052,100053,100054&patterns=100152,100152,100152&relatedDomains=100652&exampleValues=200652
 
 Output:
 - Key Metadata
@@ -308,7 +310,7 @@ The output of this components will be as follows:
 				"verified": "N",
 				"relevance": 1.0
 			}],
-			"relatedConcepts": [{
+			"relatedDomains": [{
 				"id": "100376",
 				"label": "Email-Address",
 				"relevance": 18.0
@@ -351,13 +353,15 @@ The output of this components will be as follows:
 <dom-module id="gid-concept-details">
   <template>
           <!-- fetch entity path  -->
-        	<gid-api entity = '{{apiEntity}}' path='{{path}}'></gid-api>
+        	<gid-api entity = '{{apiEntity}}' path-key= '{{pathKey}}' path='{{path}}'></gid-api>
         <!--  fetch entity path -->
         
          <!-- fetch concept details -->	
 			<gid-api auto=false
 				method="GET" api-url={{conceptDetailsUrl}} response='{{conceptDetailsResponse}}'
-				api-timeout={{conceptDetailsTimeout}} api-params={{conceptDetailsParams}}> </gid-api>			
+				error = '{{conceptDetailsError}}'
+				api-params={{conceptDetailsParams}} api-token={{conceptDetailsToken}}
+				api-timeout={{conceptDetailsTimeout}}> </gid-api>			
 	    <!-- fetch concept details -->
 
   </template>
@@ -367,6 +371,46 @@ The output of this components will be as follows:
       Polymer({
         is:'gid-concept-details',
         properties:{
+	        	paramsArr: {
+		           	   type: Array,
+		           	   notify: true,
+		           	   value: ["synonyms", "patterns", "relatedDomains", "exampleValues", "exampleColumns"]
+	            },
+	            paramsObj: {
+	        	       type: Array,
+		           	   notify: true,
+		           	   value: {}
+	            },
+	  	       synonyms: {
+		           	   type: Array,
+		           	   notify: true,
+		           	   value: []
+	           },
+	           patterns: {
+		           	   type: Array,
+		           	   notify: true,
+		           	   value: []
+	           },
+	           relatedDomains: {
+		           	   type: Array,
+		           	   notify: true,
+		           	   value: []
+	           },
+	           exampleValues: {
+		           	   type: Array,
+		           	   notify: true,
+		           	   value: []
+	           },
+	           exampleColumns: {
+		           	   type: Array,
+		           	   notify: true,
+		           	   value: []
+	           },
+	        	apiToken: {
+	            	type: String,
+	                notify: true,
+	                value : ''
+	            },
 	        	apiUrl:{
 	            	type: String,
 	    	        notify: true,
@@ -384,63 +428,42 @@ The output of this components will be as follows:
         	    conceptDetailsResponse : {
 	     	  		type : Object,
 	     	  		notify : true,
-	     	  		observer : 'conceptDetailsResponseChanged'
+	     	  		observer : 'conceptDetailsResponseReceived'
+        	  	},
+        	  	conceptDetailsError : {
+	     	  		type : Object,
+	     	  		notify : true,
+	     	  		observer : 'conceptDetailsErrorReceived'
         	  	},
         	  	conceptDetailsParams : {
 	     	   		type: String,
 	     	   		notify : true
+     	   	    },
+     	   	    conceptDetailsToken : {
+     	   	    	type: String,
+     	   	    	notify: true
      	   	    },
      	   	    conceptdetails: {
      	          type: Array,
      	          value: [],
      	          notify: true
      	        },
-     	       user: {
+     	       	user: {
      	        	type: String,
      	        	value : '',
      	        	notify :  true
      	        },
-     	       concept:{
+     	       	concept:{
      	    	  type: String,
 	   	          value : '',
 	   	          notify :  true,
-	   	          observer : 'conceptModified'
+	   	          observer : 'conceptObserver'
      	       },
-     	      synonyms: {
-	           	   type: Array,
-	           	   notify: true,
-	           	   value: []
-              },
-              patterns: {
-	           	   type: Array,
-	           	   notify: true,
-	           	   value: []
-              },
-              relatedConcepts: {
-	           	   type: Array,
-	           	   notify: true,
-	           	   value: []
-              },
-              exampleValues: {
-	           	   type: Array,
-	           	   notify: true,
-	           	   value: []
-              },
-              exampleColumns: {
-	           	   type: Array,
-	           	   notify: true,
-	           	   value: []
-              },
-     	       paramsArr: {
-	           	   type: Array,
-	           	   notify: true,
-	           	   value: ["synonyms", "patterns", "relatedConcepts", "exampleValues", "exampleColumns"]
-               },
-               paramsObj: {
-            	   type: Array,
-	           	   notify: true,
-	           	   value: {}
-               },
+	           pathKey: {
+	            	type: String,
+	                notify: true,
+	                value: ''
+	           },
                path: {
                	   type: String,
                    notify: true,
@@ -453,8 +476,8 @@ The output of this components will be as follows:
                }
                
         },
-        conceptDetailsResponseChanged : function(newvalue, oldvalue){
-          this.conceptdetails = [];
+        conceptDetailsResponseReceived : function(newvalue, oldvalue){
+        	 this.reset();
 	          if(newvalue != null){
 		             this.async(function() {
 		         		this.conceptdetails =  this.conceptdetails.concat(newvalue);
@@ -462,13 +485,28 @@ The output of this components will be as follows:
 	          }
          	
          },
-         conceptModified: function () {
+         conceptDetailsErrorReceived : function(newvalue, oldvalue){
+         	 this.reset();
+   	          if(newvalue != null){
+   		             this.async(function() {
+   		         		this.conceptdetails =  this.conceptdetails.concat(newvalue);
+   		   		 	          }, 500);
+   	          }
+            	
+         },
+         reset: function(){
+        	 this.conceptdetails = [];
+      		 this.apiEntity = '';
+             this.path = '';
+         },
+         conceptObserver: function () {
         	 if (this.concept) {
         	 	if (!this.apiUrl) {
 	      			this.conceptDetailsUrl = this.importPath + 'assets/json/concept-details.json';
 	                this.conceptDetailsTimeout =  this.conceptDetailsTimeout - 1;
       			}
         		else {
+        			this.pathKey =  'default';
          			this.apiEntity = 'CONCEPT-DETAILS';
          		}
          	}
@@ -495,10 +533,15 @@ The output of this components will be as follows:
         		    			paramVal = paramVal + ',';
         		    		}
                  		}
-                		this.paramsObj[this.paramsArr[i]]= paramVal;
+                		if(this[this.paramsArr[i]]){
+                			this.paramsObj[this.paramsArr[i]]= paramVal;
+                		}
                 	}
                 }
        			this.conceptDetailsParams = JSON.stringify(this.paramsObj);
+       			if(this.apiToken){
+       				this.conceptDetailsToken =  this.apiToken;
+       			}
        			this.conceptDetailsTimeout =  this.conceptDetailsTimeout - 1;
          		
          	}
